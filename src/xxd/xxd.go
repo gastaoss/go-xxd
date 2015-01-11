@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
-	"unicode/utf8"
 )
 
 const (
@@ -16,6 +14,9 @@ const (
 )
 
 func main() {
+	log := bufio.NewWriter(os.Stdout)
+	defer log.Flush()
+
 	line_offset := 0
 
 	if len(os.Args) != 2 {
@@ -30,40 +31,46 @@ func main() {
 	defer f.Close()
 
 	r := bufio.NewReader(f)
+	buf := make([]byte, 16)
 	for {
-		buf := make([]byte, 16)
-		n, err := r.Read(buf)
+		n, err := io.ReadFull(r, buf)
 		if n == 0 || err == io.EOF {
 			break
 		}
 
 		// Line offset
-		fmt.Printf("%06d: ", line_offset)
-		line_offset += 10
+		log.WriteString(fmt.Sprintf("%06x0: ", line_offset))
+		line_offset++
 
 		// Hex values
-		for i := 0; i < n; i += 2 {
-			fmt.Printf("%02X ", buf[i:i+2])
+		for i := 0; i < n; i++ {
+			log.WriteString(fmt.Sprintf("%02x", buf[i]))
+
+			if i%2 == 1 {
+				log.WriteByte(' ')
+			}
 		}
-		for i := n; i < len(buf); i += 2 {
-			fmt.Printf("     ")
+		if n < len(buf) {
+			for i := n; i < len(buf); i++ {
+				log.WriteString("  ")
+				if i%2 == 1 {
+					log.WriteByte(' ')
+				}
+			}
 		}
 
-		fmt.Printf(" ")
+		log.WriteString(" ")
 
 		// Character values
-		b := buf[:n]
-		for len(b) > 0 {
-			r, size := utf8.DecodeRune(b)
-
-			if strconv.IsPrint(r) {
-				fmt.Printf(string(r))
+		for i := 0; i < n; i++ {
+			r := buf[i]
+			if int(r) > 0x1f && int(r) < 0x7f {
+				log.WriteString(fmt.Sprintf("%v", string(r)))
 			} else {
-				fmt.Printf(".")
+				log.WriteByte('.')
 			}
-			b = b[size:]
 		}
 
-		fmt.Printf("\n")
+		log.WriteByte('\n')
 	}
 }
